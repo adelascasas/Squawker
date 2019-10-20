@@ -12,9 +12,13 @@ db.once('open', () => {
            username: String,
            password: String,
            email:String,
-           verified: Boolean,
+           verified: Boolean, 
            key: String,
        }),"users"); 
+    BlackList = mongoose.model('BlackList', mongoose.Schema({
+           _id: String,
+           token: String
+       }),'blacklist');
     });
 
 const elasticClient = new elasticsearch.Client({
