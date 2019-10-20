@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const elasticsearch = require('elasticsearch');
+const uuidv4 = require('uuid/v4');
+
 
 mongoose.connect("mongodb://192.168.122.22/squawker",{ useNewUrlParser: true, useUnifiedTopology: true});
 const db = mongoose.connection;
@@ -26,56 +28,41 @@ const elasticClient = new elasticsearch.Client({
     log: 'trace'
 });
 
-//initialize index
-const initIndex = (indexName) => {
-    elasticClient.indices.create({
-        index: indexName
-    }).then((resp)=>{return resp}, (err) => {return err});
-};
-
-//prepare index and mapping
-const initMapping = (indexName, docType,payload) => {
-    elasticClient.indices.putMapping({
-        index: indexName,
-        type: docType,
-        body: payload
-    }).then((resp)=>{return resp}, (err) => {return err});
-};
-
 //Add Document
 const addDocument = (indexName,_id,docType,payload) => {
     elasticClient.index({
         index: indexName,
-        type: docType,
-        id: _id,
+        id: uuidv4(),
         body: payload
     }).then((resp)=>{return resp}, (err) => {return err});
 };
 
 //Search
-const search = (indexName,docType,payload) => {
+const search = (indexName,payload) => {
     elasticClient.search({
         index: indexName,
-        type: docType,
         body: payload
     }).then((resp)=>{
-        console.log(resp);
-        return resp
+        return resp;
     }, (err) => {
-        console.log(err);
-        return err
+        return err;
     });
 };
 
 //Check if index exists
-const indexExists = (indexName) => {
+const initIndex = (indexName) => {
     elasticClient.indices.exists({
        index: indexName
-    }).then((resp)=>{return resp}, (err) => {return err});
+    }).then((resp)=>{
+       if(!resp){
+            elasticClient.indices.create({
+                index: indexName
+            }).then((resp)=>{return resp}, (err) => {return err});
+       }
+    });
 }
 
-
-
+initIndex("squawks");
 
 module.exports = {
     User,
