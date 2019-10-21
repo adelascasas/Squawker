@@ -22,7 +22,7 @@ app.post("/adduser",(req,res) => {
     db.User.findOne(param).exec().then((doc) => {
         if(doc){
             res.status(500);
-            res.json({status: 'ERROR', error: 'username and email already taken'});
+            res.json({status: 'error', error: 'username and email already taken'});
         }
         else{
             const newuser  = new db.User();
@@ -35,7 +35,7 @@ app.post("/adduser",(req,res) => {
             newuser.save((err,doc) => {
                 if(err) { 
                     res.status(500);
-                    res.json({status: 'ERROR', error: 'error adding user'});
+                    res.json({status: 'error', error: 'error adding user'});
                 }
                 else{
                     res.status(200);
@@ -56,13 +56,13 @@ app.post("/login",(req,res) => {
         console.log(doc);
         if(!doc || doc.verified == false){
               res.status(500);
-              res.json({status: 'ERROR', error: "user not found or not verified"});
+              res.json({status: 'error', error: "user not found or not verified"});
           }
         else{
            jwt.sign({user}, 'MySecretKey',(err, token) => {
                  if(err) {
                      res.status(500); 
-                     res.send({status: 'ERROR', error: "error making key"})}
+                     res.send({status: 'error', error: "error making key"})}
                  else {
                      res.cookie('token',token);
                      res.status(200);
@@ -77,7 +77,7 @@ app.post("/logout",verifyToken,(req,res) => {
     jwt.verify(req.token, 'MySecretKey',(err, data)=>{
         if(err) {
             res.status(500);
-            res.json({status:'ERROR', error:"error verifying key"});}
+            res.json({status:'error', error:"error verifying key"});}
         else{
            let invalidToken = new db.Blacklist();
            invalidToken._id = uuidv4();
@@ -85,7 +85,7 @@ app.post("/logout",verifyToken,(req,res) => {
            invalidToken.save((err, doc) => {
                if(err) {
                    res.status(500);
-                   res.json({status: 'ERROR', error:"error saving token"});}
+                   res.json({status: 'error', error:"error saving token"});}
                else{
                    res.status(200);
                    res.json({status: 'OK'});
@@ -103,7 +103,7 @@ app.post("/verify",(req,res) => {
     db.User.findOne(param).exec().then((doc) => {
          if(!doc) { 
                res.status(500);
-               res.json({status: 'ERROR', error: "user not found"});
+               res.json({status: 'error', error: "user not found"});
          }
          else{
              console.log(doc);
@@ -111,7 +111,7 @@ app.post("/verify",(req,res) => {
              doc.save((err, doc)=>{
                if(err) {
                    res.status(500); 
-                   res.json({status: "ERROR", error:"error verifying"});
+                   res.json({status: "error", error:"error verifying"});
                 }
                 else{
                        console.log(doc);
@@ -122,7 +122,7 @@ app.post("/verify",(req,res) => {
           }
     }).catch(err => {
         res.status(500);
-        res.json({status: 'ERROR',error:"error finding user"});
+        res.json({status: 'error',error:"error finding user"});
     });
 });
 
@@ -135,11 +135,10 @@ app.post("/additem",verifyToken,(req,res) => {
     jwt.verify(req.token, 'MySecretKey',(err, data)=>{
         if(err) {
             res.status(500);
-            res.json({status:'ERROR', error:"error verifying key"});}
+            res.json({status:'error', error:"error verifying key"});}
         else{
             const now = new Date();
             const item = {
-               id: uuidv4(),
                username: data.player.username,
                property: {
                    likes: 0
@@ -148,38 +147,59 @@ app.post("/additem",verifyToken,(req,res) => {
                content,
                timestamp: parseFloat((now.getTime()/1000).toFixed(2))
             };
-            db.addDocument('squawks',item);
-            res.status(200);
-            res.json({ status: 'OK', id: item.id});
+            db.addDocument('squawks',item).then((resp)=>{
+                console.log(resp);
+                res.status(200);
+                res.json({status: 'OK'});
+            }, (err) => {
+                res.status(500);
+                res.json({status:'error', error:"error adding item"});
+            });
         }   
     });
 
 });
 
-app.get("/item/:id",verifyToken,(req,res) => {
+app.get("/item/:id",(req,res) => {
    let id = req.params.id;
-   jwt.verify(req.token, 'MySecretKey',(err, data)=>{
-    if(err) {
-        res.status(500);
-        res.json({status:'ERROR', error:"error verifying key"});}
-    else{
-
-        db.searchbyId("squawks",);
+    db.searchbyId("squawks",id).then((resp)=>{
+        console.log(resp);
         res.status(200);
-        //res.json({ status: 'OK', item:});
-    }   
-});
+        res.json({status: 'OK'});
+    }, (err) => {
+        res.status(500);
+        res.json({status:'error', error:"item not found"});
+    });
 });
 
-app.post("/search",verifyToken,(req,res) => {
-    res.send("Hello");
+app.post("/search",(req,res) => {
+   let timestamp = req.body.timestamp;
+   let limit = req.body.limit;
+   if(!timestamp){
+       timestamp = parseFloat((now.getTime()/1000).toFixed(2));
+   }
+   if(!limit){
+       limit = 25;
+   }
+   else if(limit > 100){
+       limit = 100;
+   }
+   db.searchbyTime('squawks',timestamp,limit).then((resp)=>{
+        console.log(resp);
+        items = resp.hits.hits.
+        res.status(200);
+        res.json({status: 'OK', items});
+        }, (err) => {
+        res.status(500);
+        res.json({status:'error', error:"items not found"});
+    });
 });
 
 function verifyToken(req,res,next) {
     let token = req.cookies['token'];
     if(!token){ 
         res.status(500);
-        res.json({status: 'ERROR', error: 'User not logged in'});
+        res.json({status: 'error', error: 'User not logged in'});
     }
     else{
         req.token = token;
