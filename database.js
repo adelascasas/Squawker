@@ -29,19 +29,37 @@ const elasticClient = new elasticsearch.Client({
 });
 
 //Add Document
-const addDocument = (indexName,_id,docType,payload) => {
+const addDocument = (indexName,payload) => {
     elasticClient.index({
         index: indexName,
         id: uuidv4(),
         body: payload
-    }).then((resp)=>{return resp}, (err) => {return err});
+    }).then((resp)=>{return resp;}, (err) => {return err;});
 };
 
-//Search
-const search = (indexName,payload) => {
-    elasticClient.search({
+//Search by index
+const searchbyId = (indexName,id) => {
+    elasticClient.get({
         index: indexName,
-        body: payload
+        id
+      }).then((resp)=>{
+          console.log(resp);
+        return resp;
+      }, (err) => {
+        return err;
+      });
+};
+
+//Search by timestamp
+const searchbyTime = (indexName,timestamp,limit) => {
+    return elasticClient.search({
+        index: indexName,
+        body: {
+            "query": {
+                "match_all": {}
+            }
+        },
+        size: limit
     }).then((resp)=>{
         return resp;
     }, (err) => {
@@ -49,7 +67,7 @@ const search = (indexName,payload) => {
     });
 };
 
-//Check if index exists
+//init index if necessary
 const initIndex = (indexName) => {
     elasticClient.indices.exists({
        index: indexName
@@ -61,12 +79,22 @@ const initIndex = (indexName) => {
        }
     });
 }
-
 initIndex("squawks");
-
+//addDocument('squawks',{name:"test1",timestamp: 6});
+//addDocument('squawks',{name:"test2",timestamp: 7});
+//addDocument('squawks',{name:"test3",timestamp: 8});
+//addDocument('squawks',{name:"test4",timestamp: 9});
+//addDocument('squawks',{name:"test5",timestamp: 10});
+//searchbyId("squawks","dc32d2ea-056e-4513-b808-1b57c0f7f967");
+//searchbyId("squawks","3886fb09-6ba1-40c4-8794-654863211c9c");
+//test1: a1d43284-b35f-46d1-aa87-bd3632527df6
+//test2: ab727b2b-f62e-4c11-ab34-6185c0ae962d
+//test3: 2998a23a-270e-41a9-a267-38c375dda683
+searchbyTime('squawks',6,2);
 module.exports = {
     User,
     Blacklist,
-    search,
+    searchbyId,
+    searchbyTime,
     addDocument
 };
