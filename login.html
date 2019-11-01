@@ -1,0 +1,116 @@
+<html>
+<head>
+<title>Squawker</title>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>  
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+        text-align: center;
+    }
+</style>
+</head>
+<body>
+     <h1>Welcome to Squawker</h1>
+    <h3 id="responselogin">Login</h3>
+        Username: <input type="text" id="username1"/> 
+        Password: <input type="text" id="password1"/> 
+        <button type="button" id="login">Login</button> 
+     <h3 id="responseadd">Add User</h3>
+         Username: <input type="text" id="username2"/> 
+         Password: <input type="text" id="password2"/> 
+         Email: <input type="text" id="email1"/> 
+         <button type="button" id="adduser">Add User</button> 
+     <h3 id="responseverify">Verify User</h3>
+         Email: <input type="text" id="email2"/> 
+         Key: <input type="text" id="key"/> 
+         <button type="button" id="verifyuser">Verify</button> 
+    <h3 id="responseItem">Get Squawk</h3>
+         Id: <input type="text" id="itemid"/> 
+         <button type="button" id="getItem">Get</button>  
+    <h3 id="responseAddI">Add Squawk</h3>
+         content: <input type="text" id="content" placeholder='{"type":"img"}, JSON format'/> 
+         childType: <input type="text" id="childType"/> 
+         <button type="button" id="addSquawk">Add Squawk</button>
+    <h3 id="responseSearch">Search Squawks</h3>
+         limit: <input type="text" id="limit"/> 
+         timestamp: <input type="text" id="timestamp"/> 
+         <button type="button" id="Search">Search</button>    
+     <h3 id="responselogout">Logout</h3>
+         <button type="button" id="logout">Logout</button> 
+</body>
+<script> 
+    $(document).ready(function() { 
+        $('#Search').click(()=>{
+            let input = {};
+            if($('#limit').val()){
+                input.limit = parseInt($('#limit').val());
+            }
+            if($('#timestamp').val()){
+                input.timestamp = parseFloat($('#timestamp').val());
+            }
+            updateResponse('#responseSearch',input,"search",'POST');
+        });
+
+        $('#addSquawk').click(()=>{
+            let input = {
+                content : JSON.parse($('#content').val()),
+                childType: $('#childType').val()
+            }
+            updateResponse('#responseAddI',input,"additem",'POST');
+        });
+
+        $('#getItem').click(()=>{
+            let input = {
+                id : $('#itemid').val(),
+            }
+            updateResponse('#responseItem',{},"item/"+input.id,'GET');
+        });
+
+        $('#login').click(()=>{
+            let input = {
+                username : $('#username1').val(),
+                password: $("#password1").val()
+            }
+            updateResponse('#responselogin',input,'login','POST');
+        });
+
+        $('#logout').click(()=>{
+            updateResponse('#responselogout',{},'logout','POST');
+        });
+
+        $('#adduser').click(()=>{
+            let input = {
+                username : $('#username2').val(),
+                password: $("#password2").val(),
+                email: $('#email1').val()
+            }
+            updateResponse('#responseadd',input,'adduser','POST');
+        });
+
+        $('#verifyuser').click(()=>{
+            let input = {
+                key : $('#key').val(),
+                email: $('#email2').val()
+            }
+            updateResponse('#responseverify',input,'verify','POST');
+        });
+
+    });
+
+    function updateResponse(updateid,object,endpoint,type){
+        $.ajax({
+                 url: "http://130.245.171.197/"+endpoint,
+                 type,
+                 data: JSON.stringify(object),
+                 contentType: "application/json",
+                 complete:   (data,status,jQxhr) =>{
+                    $(updateid).text(function(i, oldText) {
+                         return JSON.stringify(data.responseJSON);
+                    });       
+                }
+            });
+    } 
+</script>
+</html>

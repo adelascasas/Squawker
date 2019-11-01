@@ -5,43 +5,60 @@ const uuidv4 = require('uuid/v4');
 const bodyParser = require("body-parser");
 const cookieParser = require('cookie-parser');
 const jwt = require("jsonwebtoken");
+const mongoose = require('mongoose');
 const app = express();
+const path = require('path');
 
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
 app.use(cookieParser());
+app.use((req,res,next) => {
+    // Website you wish to allow to connect
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers','Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
+app.get('/', (req,res) => {
+    	res.sendFile(path.join(__dirname+'/login.html'));
+});
 
 app.post("/adduser",(req,res) => {
     let username = req.body.username;
     let email = req.body.email;
     let password = req.body.password;
-    const param = {
-        username,
-        email
-    };
-    db.User.findOne(param).exec().then((doc) => {
-        if(doc){
+    mongoose.model('users').countDocuments({username}, (err,count) => {
+        if(count > 0){
             res.status(500);
-            res.json({status: 'error', error: 'username and email already taken'});
+            res.json({status: 'error', error: 'username or email already taken'});
         }
         else{
-            const newuser  = new db.User();
-            newuser._id = uuidv4();
-            newuser.username = username;
-            newuser.password = password;
-            newuser.email = email;
-            newuser.verified = false;
-            newuser.key = uuidv4();
-            newuser.save((err,doc) => {
-                if(err) { 
+            mongoose.model('users').countDocuments({email}, (err,count) => {
+                if(count > 0){
                     res.status(500);
-                    res.json({status: 'error', error: 'error adding user'});
+                    res.json({status: 'error', error: 'username or email already taken'});
+                    return;
                 }
-                else{
-                    res.status(200);
-                    res.json({status:'OK'});
-                    sendmail(doc.email,doc.key);                   
-                }
+                let User = mongoose.model('users');
+                const newuser  = new User();
+                newuser._id = uuidv4();
+                newuser.username = username;
+                newuser.password = password;
+                newuser.email = email;
+                newuser.verified = false;
+                newuser.key = uuidv4();
+                newuser.save((err,doc) => {
+                   if(err) { 
+                        res.status(500);
+                        res.json({status: 'error', error: 'error adding user'});
+                    }
+                    else{
+                        console.log(doc);
+                        res.status(200);
+                        res.json({status:'OK'});
+                        sendmail(doc.email,doc.key);                   
+                    }
+                });
             });
         }
     });
@@ -52,7 +69,7 @@ app.post("/login",(req,res) => {
          username: req.body.username,
          password: req.body.password
     };
-    db.User.findOne(user).exec().then((doc) => { 
+    mongoose.model('users').findOne(user).exec().then((doc) => { 
         console.log(doc);
         if(!doc || doc.verified == false){
               res.status(500);
@@ -79,7 +96,8 @@ app.post("/logout",verifyToken,(req,res) => {
             res.status(500);
             res.json({status:'error', error:"error verifying key"});}
         else{
-           let invalidToken = new db.Blacklist();
+           let Blacklist = mongoose.model('blacklist');
+           let invalidToken = new Blacklist();
            invalidToken._id = uuidv4();
            invalidToken.token = req.token;
            invalidToken.save((err, doc) => {
@@ -96,11 +114,12 @@ app.post("/logout",verifyToken,(req,res) => {
 });
 
 app.post("/verify",(req,res) => {
+    console.log(req.body);
     const param = {email: req.body.email };
     if(req.body.key != 'abracadabra'){
           param.key = req.body.key;
     }
-    db.User.findOne(param).exec().then((doc) => {
+    mongoose.model('users').findOne(param).exec().then((doc) => {
          if(!doc) { 
                res.status(500);
                res.json({status: 'error', error: "user not found"});
@@ -128,36 +147,49 @@ app.post("/verify",(req,res) => {
 
 app.post("/additem",verifyToken,(req,res) => {
     let content = req.body.content;
+    if(!content){
+        res.status(500);
+        res.json({status: 'error', error: "no content"}); 
+        return;
+    }
     let childType;
     if(req.body.childType){
         childType = req.body.childType;
     }
-    jwt.verify(req.token, 'MySecretKey',(err, data)=>{
-        if(err) {
-            res.status(500);
-            res.json({status:'error', error:"error verifying key"});}
+    mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
+        if(doc){
+             res.status(500);
+             res.json({status: 'error', error: "you have been logged out"}); 
+        }
         else{
-            const now = new Date();
-            const item = {
-               username: data.player.username,
-               property: {
-                   likes: 0
-               },   
-               retweeted: 0,
-               content,
-               timestamp: parseFloat((now.getTime()/1000).toFixed(2))
-            };
-            db.addDocument('squawks',item).then((resp)=>{
-                console.log(resp);
-                res.status(200);
-                res.json({status: 'OK'});
-            }, (err) => {
-                res.status(500);
-                res.json({status:'error', error:"error adding item"});
+            jwt.verify(req.token, 'MySecretKey',(err, data)=>{
+                if(err) {
+                    res.status(500);
+                    res.json({status:'error', error:"error verifying key"});}
+                else{
+                    const now = new Date();
+                    const item = {
+                       username: data.user.username,
+                       property: {
+                           likes: 0
+                       },   
+                       retweeted: 0,
+                       content,
+                       timestamp: parseFloat((now.getTime()/1000).toFixed(7))
+                    };
+                    console.log(item);
+                   db.addDocument('squawks',item).then((resp)=>{
+                        console.log(resp);
+                        res.status(200);
+                        res.json({status: 'OK',id: resp._id});
+                    }, (err) => {
+                        res.status(500);
+                        res.json({status:'error', error:"error adding item"});
+                    });
+                }   
             });
-        }   
+        }
     });
-
 });
 
 app.get("/item/:id",(req,res) => {
@@ -165,7 +197,9 @@ app.get("/item/:id",(req,res) => {
     db.searchbyId("squawks",id).then((resp)=>{
         console.log(resp);
         res.status(200);
-        res.json({status: 'OK'});
+        let item = resp._source;
+        item.id = resp._id;
+        res.json({status: 'OK',item});
     }, (err) => {
         res.status(500);
         res.json({status:'error', error:"item not found"});
@@ -175,8 +209,9 @@ app.get("/item/:id",(req,res) => {
 app.post("/search",(req,res) => {
    let timestamp = req.body.timestamp;
    let limit = req.body.limit;
+   let now = new Date();
    if(!timestamp){
-       timestamp = parseFloat((now.getTime()/1000).toFixed(2));
+       timestamp = parseFloat((now.getTime()/1000).toFixed(7));
    }
    if(!limit){
        limit = 25;
@@ -185,8 +220,12 @@ app.post("/search",(req,res) => {
        limit = 100;
    }
    db.searchbyTime('squawks',timestamp,limit).then((resp)=>{
-        console.log(resp);
-        items = resp.hits.hits.
+       let items = resp.hits.hits.map((val,index)=>{
+             let item = val._source;
+             item.id = val._id;
+             return item;
+        });
+        console.log(items);
         res.status(200);
         res.json({status: 'OK', items});
         }, (err) => {

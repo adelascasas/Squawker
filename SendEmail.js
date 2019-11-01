@@ -15,8 +15,8 @@ const sendMail = (email,key) => {
                   from: 'ubuntu@nodeapp.cloud.compas.cs.stonybrook.edu',
                   to: email,
                   subject: 'Key for email verification',
-                  html: `<p>validation key: <${key}></p>`
-           }, (err) => { console.log("mail send error", err)});
+                  text: `validation key: <${key}>`
+           }, (err) => { if(err) {console.log("mail send error", err)}});
 
 }
 

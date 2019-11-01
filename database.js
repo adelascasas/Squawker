@@ -5,11 +5,9 @@ const uuidv4 = require('uuid/v4');
 
 mongoose.connect("mongodb://192.168.122.22/squawker",{ useNewUrlParser: true, useUnifiedTopology: true});
 const db = mongoose.connection;
-let User;
-let Blacklist
   
 db.once('open', () => { 
-    User =  mongoose.model("User",mongoose.Schema({
+    mongoose.model("users",mongoose.Schema({
            _id: String,
            username: String,
            password: String,
@@ -17,7 +15,7 @@ db.once('open', () => {
            verified: Boolean, 
            key: String,
        }),"users"); 
-    BlackList = mongoose.model('BlackList', mongoose.Schema({
+    mongoose.model('blacklist', mongoose.Schema({
            _id: String,
            token: String
        }),'blacklist');
@@ -76,10 +74,11 @@ const initIndex = (indexName) => {
 }
 
 initIndex("squawks");
+//elasticClient.indices.delete({
+//    index: 'squawks',
+//  });
 
 module.exports = {
-    User,
-    Blacklist,
     searchbyId,
     searchbyTime,
     addDocument
