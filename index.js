@@ -288,58 +288,18 @@ app.get('/user/:username',(req,res) => {
 });
 
 app.get('/user/:username/posts',(req,res) => {
-   
-});
-
-app.get('/user/:username/followers',(req,res) => {
-    let limit  = req.body.limit;
-   let username = req.params.username;
-   if(!limit){
-       limit = 50;
-   }
-   if(limit > 200){
-       limit = 200;
-   }
-   mongoose.model('users').findOne({username}).exec().then((doc) => { 
-         console.log(doc);
-        if(!doc || doc.verified == false){
-              res.status(500);
-              res.json({status: 'error', error: "user not found"});
-        }
-        else{
-           res.status(200);
-           res.json({status: 'ok', users: doc.followers});
-        }
-   });
-});
-
-app.get('/user/:username/following',(req,res) => {
-    let limit  = req.body.limit;
-   let username = req.params.username;
-   if(!limit){
-       limit = 50;
-   }
-   if(limit > 200){
-       limit = 200;
-   }
-   mongoose.model('users').findOne({username}).exec().then((doc) => { 
-         console.log(doc);
-        if(!doc || doc.verified == false){
-              res.status(500);
-              res.json({status: 'error', error: "user not found"});
-        }
-        else{
-           res.status(200);
-           res.json({status: 'ok', users: doc.following});
-        }
-   });
-});
-
-app.post('/follow',(req,res) => {
+    let limit = req.body.limit;
+    let username = req.params.username;
+    if(!limit){
+        limit = 50;
+    }
+    if(limit > 200){
+        limit = 200;
+    }
     mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
         if(doc){
              res.status(500);
-             res.json({status: 'error', error: "you have been logged out"}); 
+             res.json({status: 'error', error: "you have been logged out"});  
         }
         else{
             jwt.verify(req.token, 'MySecretKey',(err, data)=>{
@@ -347,11 +307,116 @@ app.post('/follow',(req,res) => {
                     res.status(500);
                     res.json({status:'error', error:"error verifying key"});}
                 else{
-                                
+                      db.searchbyUsername('squawkers',limit,username).then((resp) => {
+                        let items = resp.hits.hits.map((val,index)=>{
+                            return val._id;
+                        });
+                        res.status(200);
+                        res.json({status: 'ok', items});
+                      });
                 }   
             });
         }
     });
+});
+
+app.get('/user/:username/followers',(req,res) => {
+    let limit  = req.body.limit;
+    let username = req.params.username;
+    if(!limit){
+        limit = 50;
+    }
+    if(limit > 200){
+        limit = 200;
+    }
+    mongoose.model('users').findOne({username}).exec().then((doc) => { 
+         console.log(doc);
+         if(!doc || doc.verified == false){
+               res.status(500);
+               res.json({status: 'error', error: "user not found"});
+         }
+         else{
+            let followers = doc.followers.slice(0,limit);
+            res.status(200);
+            res.json({status: 'ok', users: followers});
+         }
+    });
+});
+
+app.get('/user/:username/following',(req,res) => {
+    let limit  = req.body.limit;
+    let username = req.params.username;
+    if(!limit){
+        limit = 50;
+    }
+    if(limit > 200){
+        limit = 200;
+    }
+    mongoose.model('users').findOne({username}).exec().then((doc) => { 
+          console.log(doc);
+         if(!doc || doc.verified == false){
+               res.status(500);
+               res.json({status: 'error', error: "user not found"});
+         }
+         else{
+            let following = doc.following.slice(0,limit);
+            res.status(200);
+            res.json({status: 'ok', users: following});
+         }
+    });
+});
+
+app.post('/follow',(req,res) => {
+     let username = req.body.username;
+     let follow = req.body.follow;
+     if(!follow){
+         follow = true;
+     }
+     mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
+         if(doc){
+              res.status(500);
+              res.json({status: 'error', error: "you have been logged out"}); 
+         }
+         else{
+             jwt.verify(req.token, 'MySecretKey',(err, data)=>{
+                 if(err) {
+                     res.status(500);
+                     res.json({status:'error', error:"error verifying key"});}
+                 else{
+                       if(follow){
+                         mongoose.model('users').updateOne({username: data.user.username},
+                             {$push:{
+                                  following: {
+                                      $each: [username],
+                                      $position: 0
+                                 }
+                               }},
+                            (err, result) => {if(err){console.log(err);}}
+                         )
+                         mongoose.model('users').updateOne({username},
+                             {$push:{
+                                  followers: {
+                                      $each: [data.user.username],
+                                      $position: 0
+                                 }
+                               }},
+                            (err, result) => {if(err){console.log(err);}}
+                         )
+                       }
+                       else{
+                         mongoose.model('users').updateOne({username: data.user.username},
+                             {$pullAll:{ following: [username]}},
+                             (err, result) => {if(err){console.log(err);}})
+                         mongoose.model('users').updateOne({username},
+                             {$pullAll:{followers: [data.user.username]}},
+                            (err, result) => {if(err){console.log(err);}})
+                       }
+                       res.status(200);
+                       res.json({status: 'ok'});          
+                 }   
+             });
+         }
+     });
 });
 
 

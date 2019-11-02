@@ -70,6 +70,18 @@ const searchbyTime = (indexName,timestamp,limit) => {
     });
 };
 
+const searchbyUsername = (indexName,limit,username) => {
+    return elasticClient.search({
+        index: indexName,
+        body: {
+            "query": {
+                "term": { "username": username }
+            }
+        },
+       size: limit
+    });
+}
+
 //init index if necessary
 const initIndex = (indexName) => {
     elasticClient.indices.exists({
@@ -91,6 +103,7 @@ initIndex("squawks");
 module.exports = {
     searchbyId,
     searchbyTime,
+    searchbyUsername,
     deletebyId,
     addDocument
 };
