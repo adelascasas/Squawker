@@ -234,6 +234,127 @@ app.post("/search",(req,res) => {
     });
 });
 
+app.delete('/item/:id',(req,res) => {
+    mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
+        if(doc){
+             res.status(500);
+             res.json({status: 'error', error: "you have been logged out"}); 
+        }
+        else{
+            jwt.verify(req.token, 'MySecretKey',(err, data)=>{
+                if(err) {
+                    res.status(500);
+                    res.json({status:'error', error:"error verifying key"});}
+                else{
+                    db.searchbyId("squawks",req.params.id).then((resp)=>{
+                        let username = resp._source.username;
+                        if(username === data.user.username){
+                            db.deletebyId(req.params.id);
+                            res.status(200);
+                            res.json({status: 'OK'});
+                        }
+                        else{
+                            res.status(500);
+                            res.json({status:'error', error:"permission to delete denied"});
+                        }
+                    }, (err) => {
+                        res.status(500);
+                        res.json({status:'error', error:"item not found"});
+                    });                 
+                }   
+            });
+        }
+    });
+});
+
+app.get('/user/:username',(req,res) => {
+    let username = req.params.username;
+    mongoose.model('users').findOne({username}).exec().then((doc) => { 
+        console.log(doc);
+        if(!doc || doc.verified == false){
+              res.status(500);
+              res.json({status: 'error', error: "user not found"});
+        }
+        else{
+           let user = {
+                email: doc.email,
+                followers: doc.follower.length,
+                following: doc.following.length
+           }
+           res.status(200);
+           res.json({status: 'ok', user});
+       }
+   });
+});
+
+app.get('/user/:username/posts',(req,res) => {
+   
+});
+
+app.get('/user/:username/followers',(req,res) => {
+    let limit  = req.body.limit;
+   let username = req.params.username;
+   if(!limit){
+       limit = 50;
+   }
+   if(limit > 200){
+       limit = 200;
+   }
+   mongoose.model('users').findOne({username}).exec().then((doc) => { 
+         console.log(doc);
+        if(!doc || doc.verified == false){
+              res.status(500);
+              res.json({status: 'error', error: "user not found"});
+        }
+        else{
+           res.status(200);
+           res.json({status: 'ok', users: doc.followers});
+        }
+   });
+});
+
+app.get('/user/:username/following',(req,res) => {
+    let limit  = req.body.limit;
+   let username = req.params.username;
+   if(!limit){
+       limit = 50;
+   }
+   if(limit > 200){
+       limit = 200;
+   }
+   mongoose.model('users').findOne({username}).exec().then((doc) => { 
+         console.log(doc);
+        if(!doc || doc.verified == false){
+              res.status(500);
+              res.json({status: 'error', error: "user not found"});
+        }
+        else{
+           res.status(200);
+           res.json({status: 'ok', users: doc.following});
+        }
+   });
+});
+
+app.post('/follow',(req,res) => {
+    mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
+        if(doc){
+             res.status(500);
+             res.json({status: 'error', error: "you have been logged out"}); 
+        }
+        else{
+            jwt.verify(req.token, 'MySecretKey',(err, data)=>{
+                if(err) {
+                    res.status(500);
+                    res.json({status:'error', error:"error verifying key"});}
+                else{
+                                
+                }   
+            });
+        }
+    });
+});
+
+
 function verifyToken(req,res,next) {
     let token = req.cookies['token'];
     if(!token){ 

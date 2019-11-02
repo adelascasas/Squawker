@@ -14,6 +14,8 @@ db.once('open', () => {
            email:String,
            verified: Boolean, 
            key: String,
+           followers: [{ type: String}],
+           following: [ { type: String}]
        }),"users"); 
     mongoose.model('blacklist', mongoose.Schema({
            _id: String,
@@ -42,6 +44,14 @@ const searchbyId = (indexName,id) => {
         id
       });
 };
+
+//Delete document with given id
+const deletebyId = (indexName,id) => {
+    return elasticClient.delete({
+        index,
+        id
+      });
+}
 
 //Search by timestamp
 const searchbyTime = (indexName,timestamp,limit) => {
@@ -81,5 +91,6 @@ initIndex("squawks");
 module.exports = {
     searchbyId,
     searchbyTime,
+    deletebyId,
     addDocument
 };
