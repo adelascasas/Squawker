@@ -25,13 +25,12 @@ const Userexists = async function(req,res,next) {
         next();
     }
     else{
-        res.status(500);
-        res.json({status: 'error', error: 'User not added'});
+        res.status(500).json({status: 'error', error: 'User not added'});
     }
 }
 
-const getFollowing = async (username) =>{
-    return await mongoose.model('users').findOne({username}).exec().then((doc) => { 
+const getFollowing = async (user) =>{
+    return await mongoose.model('users').findOne({username: user.username}).exec().then((doc) => { 
         return doc.following;
     });
 }
@@ -253,7 +252,7 @@ app.post("/search",setToken,(req,res) => {
     }
     else{
         jwt.verify(req.token, 'MySecretKey',(err, data)=>{
-                getFollowing(data.user.username).then( result => {
+                getFollowing(data.user).then( result => {
                     usernames = (!err && following) ? usernames.concat(result) : usernames;
                     db.searchbyParams(timestamp,limit,req.body.q,usernames).then((resp)=>{
                         let items = resp.hits.hits.map((val,index)=>{
