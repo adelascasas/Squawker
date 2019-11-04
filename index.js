@@ -19,6 +19,23 @@ app.use((req,res,next) => {
     next();
 });
 
+const Userexists = async function(req,res,next) {
+    let doc =  await mongoose.model('users').findOne({username: req.body.username});
+    if(doc){
+        next();
+    }
+    else{
+        res.status(500);
+        res.json({status: 'error', error: 'User not added'});
+    }
+}
+
+const getFollowing = async (username) =>{
+    return await mongoose.model('users').findOne({username}).exec().then((doc) => { 
+        return doc.following;
+    });
+}
+
 app.get('/', (req,res) => {
     	res.sendFile(path.join(__dirname+'/login.html'));
 });
@@ -206,10 +223,12 @@ app.get("/item/:id",(req,res) => {
     });
 });
 
-app.post("/search",(req,res) => {
+app.post("/search",setToken,(req,res) => {
    let timestamp = req.body.timestamp;
    let limit = req.body.limit;
    let now = new Date();
+   let usernames = (req.body.username) ? [req.body.username]:[];
+   let following = (req.body.following == undefined) ? true: req.body.following;
    if(!timestamp){
        timestamp = parseFloat((now.getTime()/1000).toFixed(7));
    }
@@ -219,22 +238,40 @@ app.post("/search",(req,res) => {
    else if(limit > 100){
        limit = 100;
    }
-   db.searchbyTime('squawks',timestamp,limit).then((resp)=>{
-       let items = resp.hits.hits.map((val,index)=>{
-             let item = val._source;
-             item.id = val._id;
-             return item;
-        });
-        console.log(items);
-        res.status(200);
-        res.json({status: 'OK', items});
-        }, (err) => {
-        res.status(500);
-        res.json({status:'error', error:"items not found"});
+   mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
+    if(doc){ 
+        db.searchbyParams(timestamp,limit,req.body.q,usernames).then((resp)=>{
+            let items = resp.hits.hits.map((val,index)=>{
+                    let item = val._source;
+                    item.id = val._id;
+                    return item;
+                });
+                res.status(200).json({status: 'OK', items});
+                }, (err) => {
+                res.status(500).json({status:'error', error:"items not found"});
+            });   
+    }
+    else{
+        jwt.verify(req.token, 'MySecretKey',(err, data)=>{
+                getFollowing(data.user.username).then( result => {
+                    usernames = (!err && following) ? usernames.concat(result) : usernames;
+                    db.searchbyParams(timestamp,limit,req.body.q,usernames).then((resp)=>{
+                        let items = resp.hits.hits.map((val,index)=>{
+                                let item = val._source;
+                                item.id = val._id;
+                                return item;
+                            });
+                            res.status(200).json({status: 'OK', items});
+                            }, (err) => {
+                            res.status(500).json({status:'error', error:"items not found"});
+                    });  
+                });
+            });
+        }
     });
 });
 
-app.delete('/item/:id',(req,res) => {
+app.delete('/item/:id',verifyToken,(req,res) => {
     mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
         if(doc){
              res.status(500);
@@ -278,11 +315,10 @@ app.get('/user/:username',(req,res) => {
         else{
            let user = {
                 email: doc.email,
-                followers: doc.follower.length,
+                followers: doc.followers.length,
                 following: doc.following.length
            }
-           res.status(200);
-           res.json({status: 'ok', user});
+           res.status(200).json({status: 'ok', user});
        }
    });
 });
@@ -296,28 +332,12 @@ app.get('/user/:username/posts',(req,res) => {
     if(limit > 200){
         limit = 200;
     }
-    mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
-        if(doc){
-             res.status(500);
-             res.json({status: 'error', error: "you have been logged out"});  
-        }
-        else{
-            jwt.verify(req.token, 'MySecretKey',(err, data)=>{
-                if(err) {
-                    res.status(500);
-                    res.json({status:'error', error:"error verifying key"});}
-                else{
-                      db.searchbyUsername('squawkers',limit,username).then((resp) => {
-                        let items = resp.hits.hits.map((val,index)=>{
-                            return val._id;
-                        });
-                        res.status(200);
-                        res.json({status: 'ok', items});
-                      });
-                }   
-            });
-        }
-    });
+    db.searchbyUsername('squawks',limit,username).then((resp) => {
+        let items = resp.hits.hits.map((val,index)=>{
+            return val._id;
+        });
+        res.status(200).json({status: 'ok', items});
+    });                       
 });
 
 app.get('/user/:username/followers',(req,res) => {
@@ -332,13 +352,11 @@ app.get('/user/:username/followers',(req,res) => {
     mongoose.model('users').findOne({username}).exec().then((doc) => { 
          console.log(doc);
          if(!doc || doc.verified == false){
-               res.status(500);
-               res.json({status: 'error', error: "user not found"});
+               res.status(500).json({status: 'error', error: "user not found"});
          }
          else{
             let followers = doc.followers.slice(0,limit);
-            res.status(200);
-            res.json({status: 'ok', users: followers});
+            res.status(200).json({status: 'ok', users: followers});
          }
     });
 });
@@ -355,27 +373,24 @@ app.get('/user/:username/following',(req,res) => {
     mongoose.model('users').findOne({username}).exec().then((doc) => { 
           console.log(doc);
          if(!doc || doc.verified == false){
-               res.status(500);
-               res.json({status: 'error', error: "user not found"});
+               res.status(500).json({status: 'error', error: "user not found or verified"});
          }
          else{
             let following = doc.following.slice(0,limit);
-            res.status(200);
-            res.json({status: 'ok', users: following});
+            res.status(200).json({status: 'ok', users: following});
          }
     });
 });
 
-app.post('/follow',(req,res) => {
+app.post('/follow',verifyToken,Userexists,(req,res) => {
      let username = req.body.username;
      let follow = req.body.follow;
-     if(!follow){
+     if(follow == undefined){
          follow = true;
      }
      mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
          if(doc){
-              res.status(500);
-              res.json({status: 'error', error: "you have been logged out"}); 
+              res.status(500).json({status: 'error', error: "you have been logged out"}); 
          }
          else{
              jwt.verify(req.token, 'MySecretKey',(err, data)=>{
@@ -385,20 +400,14 @@ app.post('/follow',(req,res) => {
                  else{
                        if(follow){
                          mongoose.model('users').updateOne({username: data.user.username},
-                             {$push:{
-                                  following: {
-                                      $each: [username],
-                                      $position: 0
-                                 }
+                             {$addToSet:{
+                                  following: username
                                }},
                             (err, result) => {if(err){console.log(err);}}
                          )
                          mongoose.model('users').updateOne({username},
-                             {$push:{
-                                  followers: {
-                                      $each: [data.user.username],
-                                      $position: 0
-                                 }
+                             {$addToSet:{
+                                  followers: data.user.username
                                }},
                             (err, result) => {if(err){console.log(err);}}
                          )
@@ -430,6 +439,11 @@ function verifyToken(req,res,next) {
         req.token = token;
         next();
     }
+}
+
+function setToken(req,res,next) {
+    req.token = req.cookies['token'];
+    next();
 }
 
 app.listen(5000,"192.168.122.21");

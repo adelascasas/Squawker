@@ -46,28 +46,41 @@ const searchbyId = (indexName,id) => {
 };
 
 //Delete document with given id
-const deletebyId = (indexName,id) => {
+const deletebyId = (id) => {
     return elasticClient.delete({
-        index,
+        index:"squawks",
         id
       });
 }
 
 //Search by timestamp
-const searchbyTime = (indexName,timestamp,limit) => {
-    return elasticClient.search({
-        index: indexName,
+const searchbyParams = (timestamp,limit,query,usernames) => {
+    let params = {
+        index: "squawks",
         body: {
             "query": {
-                "range": {
-                    "timestamp": {
-                        "lte": timestamp
-                    }
-                }
+                "bool": {
+                    "must":[
+                        {"range": {
+                         "timestamp": {"lte": timestamp}
+                        }}
+                    ]
+                } 
             }
         },
        size: limit
-    });
+     };
+    if(usernames.length > 0){
+        params.body.query.bool.must[1] = {};
+        params.body.query.bool.must[1].terms = {};
+        params.body.query.bool.must[1].terms.username = usernames;
+    }
+    if(query){
+        params.body.query.bool.must[2] = {};
+        params.body.query.bool.must[2].multi_match = {};
+        params.body.query.bool.must[2].multi_match.query = query;
+    }
+    return elasticClient.search(params);
 };
 
 const searchbyUsername = (indexName,limit,username) => {
@@ -102,7 +115,7 @@ initIndex("squawks");
 
 module.exports = {
     searchbyId,
-    searchbyTime,
+    searchbyParams,
     searchbyUsername,
     deletebyId,
     addDocument
