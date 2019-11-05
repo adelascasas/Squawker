@@ -88,7 +88,11 @@ const searchbyUsername = (indexName,limit,username) => {
         index: indexName,
         body: {
             "query": {
-                "term": { "username": username }
+                "term": { 
+                    "username": {
+                        "value": username
+                    }
+                }
             }
         },
        size: limit
@@ -109,9 +113,9 @@ const initIndex = (indexName) => {
 }
 
 initIndex("squawks");
-//elasticClient.indices.delete({
-//    index: 'squawks',
-//  });
+/*elasticClient.indices.delete({
+    index: 'squawks',
+  });*/
 
 module.exports = {
     searchbyId,
