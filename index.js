@@ -240,8 +240,8 @@ app.post("/search",setToken,(req,res) => {
        limit = 100;
    }
    mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
+    usernames = usernames.map((value) => {return value.toLowerCase();}); 
     if(doc){
-        usernames = usernames.map((value) => {return value.toLowerCase();}); 
         db.searchbyParams(timestamp,limit,req.body.q,usernames).then((resp)=>{
             let items = resp.hits.hits.map((val,index)=>{
                     let item = val._source;
@@ -254,11 +254,12 @@ app.post("/search",setToken,(req,res) => {
             });   
     }
     else{
-        usernames = usernames.map((value) => {return value.toLowerCase();}); 
         jwt.verify(req.token, 'MySecretKey',(err, data)=>{
                 let check = (!err) ? data.user.username:undefined;
                 getFollowing(check).then( result => {
                     usernames = (!err && following) ? usernames.concat(result) : usernames;
+                    usernames = usernames.map((value) => {return value.toLowerCase();}); 
+                    console.log(usernames);
                     db.searchbyParams(timestamp,limit,req.body.q,usernames).then((resp)=>{
                         let items = resp.hits.hits.map((val,index)=>{
                                 let item = val._source;
