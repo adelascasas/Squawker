@@ -8,6 +8,8 @@ const jwt = require("jsonwebtoken");
 const mongoose = require('mongoose');
 const app = express();
 const path = require('path');
+var media = require('./media.js');
+const items = require('./items.js');
 
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
@@ -18,6 +20,9 @@ app.use((req,res,next) => {
     res.setHeader('Access-Control-Allow-Headers','Origin, X-Requested-With, Content-Type, Accept');
     next();
 });
+app.use('/', media);
+app.use('/', items);
+
 
 const Userexists = async function(req,res,next) {
     let doc =  await mongoose.model('users').findOne({username: req.body.username});
@@ -171,8 +176,16 @@ app.post("/additem",verifyToken,(req,res) => {
         return;
     }
     let childType;
+    let media;
+    let parent;
     if(req.body.childType){
         childType = req.body.childType;
+    }
+    if(req.body.media){
+        media = req.body.media;
+    }
+    if(req.body.parent){
+        parent = req.body.parent;
     }
     mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
         if(doc){
@@ -190,12 +203,14 @@ app.post("/additem",verifyToken,(req,res) => {
                        username: data.user.username,
                        property: {
                            likes: 0
-                       },   
+                       },
+                       childType,
+                       parent,
+                       media,   
                        retweeted: 0,
                        content,
                        timestamp: parseFloat((now.getTime()/1000).toFixed(7))
                     };
-                    console.log(item);
                    db.addDocument('squawks',item).then((resp)=>{
                         console.log(resp);
                         res.status(200);
