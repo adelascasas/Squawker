@@ -40,16 +40,23 @@ const elasticClient = new elasticsearch.Client({
 });
 
 //Add media
-const addMedia = (id,blob) => {
-    const query = 'INSERT INTO media (id, content) VALUES (?, ?) USING TTL ?';
-    const params = [id,blob,1200];
+const addMedia = (id,blob,extension) => {
+    const query = 'INSERT INTO media (id, content,extension) VALUES (?, ?, ?) USING TTL ?';
+    const params = [id,blob,extension,1200];
     return casClient.execute(query, params, { prepare: true });
+}
+
+//Delete media
+const delMedia = (id) => {
+    const query = 'DELETE FROM media WHERE id = ?';
+    const param = [id];
+    return casClient.execute(query,param,{prepare: true});
 }
 
 //Get media 
 const getMedia = (id) => {
-    const query = "SELECT contents FROM media WHERE id = ?";
-    client.execute(query, [id]);
+    const query = 'SELECT content,extension FROM media WHERE id = ?';
+    return casClient.execute(query, [id],{prepare: true});
 } 
 
 //Add Document
@@ -72,7 +79,7 @@ const searchbyId = (indexName,id) => {
 //Increment likes for specified item
 const incrementLikes = (id) => {
     return elasticClient.update({
-        index: indexName,
+        index: "squawks",
         id,
         body: {
             "script" : "ctx._source.property.likes++"
@@ -83,7 +90,7 @@ const incrementLikes = (id) => {
 //Decrement likes for specified item
 const decrementLikes = (id) => {
     return elasticClient.update({
-        index: indexName,
+        index: "squawks",
         id,
         body: {
             "script" : "if(ctx._source.property.likes > 0){ctx._source.property.likes--}"
@@ -100,7 +107,7 @@ const deletebyId = (id) => {
 }
 
 //Search by timestamp
-const searchbyParams = (timestamp,limit,query,usernames) => {
+const searchbyParams = (input) => {
     let params = {
         index: "squawks",
         body: {
@@ -108,23 +115,55 @@ const searchbyParams = (timestamp,limit,query,usernames) => {
                 "bool": {
                     "must":[
                         {"range": {
-                         "timestamp": {"lte": timestamp}
+                         "timestamp": {"lte": input.timestamp}
                         }}
                     ]
                 } 
-            }
+            },
+            "sort": [
+                {"retweeted" : "asc"},
+                {"content.likes" : "asc"},
+                "_score"
+            ] 
         },
-       size: limit
+       size: input.limit
      };
-    if(usernames.length > 0){
+    if(input.rank === "time"){
+         params.body.sort = [];
+         params.body.sort[0] = {};
+         params.body.sort[0].timestamp = "asc";
+    }
+    if(input.usernames.length > 0){
         params.body.query.bool.must[1] = {};
         params.body.query.bool.must[1].terms = {};
-        params.body.query.bool.must[1].terms.username = usernames;
+        params.body.query.bool.must[1].terms.username = input.usernames;
     }
-    if(query){
+    if(input.query){
         params.body.query.bool.must[2] = {};
         params.body.query.bool.must[2].multi_match = {};
-        params.body.query.bool.must[2].multi_match.query = query;
+        params.body.query.bool.must[2].multi_match.query = input.query;
+    }
+    if(!input.hasMedia){
+        params.body.query.bool.must_not = [];
+        params.body.query.bool.must_not[0] = {};
+        params.body.query.bool.must_not[0].script = {};
+        params.body.query.bool.must_not.script.script ="_source.media.length > 0"
+        if(!input.replies){
+            params.body.query.bool.must_not[1] = {};
+            params.body.query.bool.must_not[1].term = { "childType": { "value": "reply"}};
+        }else{
+            params.body.query.bool.must[3] = {};
+            params.body.query.bool.must[3].term = { "parent": { "value": input.parent}};
+        }
+    }else{
+        if(!input.replies){
+            params.body.query.bool.must_not = [];
+            params.body.query.bool.must_not[0] = {};
+            params.body.query.bool.must_not[0].term = { "childType": { "value": "reply"}};
+        }else{
+            params.body.query.bool.must[3] = {};
+            params.body.query.bool.must[3].term = { "parent": { "value": input.parent}};
+        }
     }
     return elasticClient.search(params);
 };
@@ -172,5 +211,6 @@ module.exports = {
     addMedia,
     getMedia,
     incrementLikes,
-    decrementLikes
+    decrementLikes,
+    delMedia
 };
