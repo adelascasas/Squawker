@@ -26,7 +26,8 @@ db.once('open', () => {
            verified: Boolean, 
            key: String,
            followers: [{ type: String}],
-           following: [ { type: String}]
+           following: [ { type: String}],
+           media: [{type: String}]
        }),"users"); 
     mongoose.model('blacklist', mongoose.Schema({
            _id: String,

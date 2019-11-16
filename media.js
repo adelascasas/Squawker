@@ -31,9 +31,15 @@ router.post('/addmedia',verifyToken ,(req, res) => {
                             let result =   reader.result.substring(reader.result.indexOf(",")+1);
                             let buffer = new Buffer.from(result,"base64");
                             let id = uuidv4();
-                            database.addMedia(id,buffer,extension).then((result) => {res.status(200).json({status:'OK', id});}).catch((err) => {
-                                res.status(500).json({status:"error", error:"error adding media"});
-                            });
+                            database.addMedia(id,buffer,extension).then((result) => {
+                                mongoose.model('users').updateOne({username: data.user.username},
+                                    {$addToSet:{
+                                         media: id
+                                      }},
+                                   (err, result) => {if(err){console.log(err);}}
+                                )
+                                res.status(200).json({status:'OK', id});
+                            }).catch((err) => {res.status(500).json({status:"error", error:"error adding media"});});
                         };
                    })
                 }   

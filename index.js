@@ -171,8 +171,7 @@ app.post("/verify",(req,res) => {
 app.post("/additem",verifyToken,(req,res) => {
     let content = req.body.content;
     if(!content){
-        res.status(500);
-        res.json({status: 'error', error: "no content"}); 
+        res.status(500).json({status: 'error', error: "no content"}); 
         return;
     }
     let childType = "";
@@ -188,38 +187,34 @@ app.post("/additem",verifyToken,(req,res) => {
     }
     mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
         if(doc){
-             res.status(500);
-             res.json({status: 'error', error: "you have been logged out"}); 
+             res.status(500).json({status: 'error', error: "you have been logged out"}); 
         }
         else{
-            jwt.verify(req.token, 'MySecretKey',(err, data)=>{
-                if(err) {
-                    res.status(500);
-                    res.json({status:'error', error:"error verifying key"});}
-                else{
-                    const now = new Date();
-                    const item = {
-                       username: data.user.username,
-                       property: {
-                           likes: 0
-                       },
-                       childType,
-                       parent,
-                       media,   
-                       retweeted: 0,
-                       content,
-                       timestamp: parseFloat((now.getTime()/1000).toFixed(7))
-                    };
-                    console.log(item);
-                   db.addDocument('squawks',item).then((resp)=>{
-                        res.status(200);
-                        res.json({status: 'OK',id: resp._id});
-                    }, (err) => {
-                        res.status(500);
-                        res.json({status:'error', error:"error adding item"});
+                jwt.verify(req.token, 'MySecretKey',(err, data)=>{
+                    if(err) {
+                        res.status(500).json({status:'error', error:"error verifying key"});}
+                    else{
+                        mongoose.model('users').findOne({username: data.user.username}).exec().then((doc) => { 
+                            if(!media.every(elem => doc.media.indexOf(elem) > -1)){ res.status(500).json({status:'error', error:"media files not affiliated"}); return;}
+                            const now = new Date();
+                            const item = {
+                                username: data.user.username,
+                                property: {
+                                    likes: 0
+                                },
+                                childType,
+                                parent,
+                                media,   
+                                retweeted: 0,
+                                content,
+                                timestamp: parseFloat((now.getTime()/1000).toFixed(7))
+                            };
+                            db.addDocument('squawks',item).then((resp)=>{
+                                    res.status(200).json({status: 'OK',id: resp._id});
+                                }, (err) => {res.status(500).json({status:'error', error:"error adding item"});});
+                            });
+                        }   
                     });
-                }   
-            });
         }
     });
 });
