@@ -87,6 +87,17 @@ const incrementLikes = (id) => {
       });
 };
 
+//Increment retweets for specified item
+const incrementretweets = (id) => {
+    return elasticClient.update({
+        index: "squawks",
+        id,
+        body: {
+            "script" : "ctx._source.retweeted++"
+        }        
+      });
+};
+
 //Decrement likes for specified item
 const decrementLikes = (id) => {
     return elasticClient.update({
@@ -121,49 +132,45 @@ const searchbyParams = (input) => {
                 } 
             },
             "sort": [
-                {"retweeted" : "asc"},
-                {"content.likes" : "asc"},
+                {"retweeted" : "desc"},
+                {"property.likes" : "desc"},
                 "_score"
-            ] 
+            ]
         },
        size: input.limit
      };
+     let index;
     if(input.rank === "time"){
          params.body.sort = [];
          params.body.sort[0] = {};
-         params.body.sort[0].timestamp = "asc";
+         params.body.sort[0].timestamp = "desc";
     }
     if(input.usernames.length > 0){
-        params.body.query.bool.must[1] = {};
-        params.body.query.bool.must[1].terms = {};
-        params.body.query.bool.must[1].terms.username = input.usernames;
+        index = params.body.query.bool.must.length;
+        params.body.query.bool.must[index] = {};
+        params.body.query.bool.must[index].terms = {};
+        params.body.query.bool.must[index].terms.username = input.usernames;
     }
     if(input.query){
-        params.body.query.bool.must[2] = {};
-        params.body.query.bool.must[2].multi_match = {};
-        params.body.query.bool.must[2].multi_match.query = input.query;
+        index = params.body.query.bool.must.length;
+        params.body.query.bool.must[index] = {};
+        params.body.query.bool.must[index].multi_match = {};
+        params.body.query.bool.must[index].multi_match.query = input.query;
     }
-    if(!input.hasMedia){
+    if(input.hasMedia){
+        index = params.body.query.bool.must.length;
+        params.body.query.bool.must[index] = {};
+        params.body.query.bool.must[index].exists = {"field":"media"};
+    }
+    if(!input.replies){
         params.body.query.bool.must_not = [];
         params.body.query.bool.must_not[0] = {};
-        params.body.query.bool.must_not[0].script = {};
-        params.body.query.bool.must_not.script.script ="_source.media.length > 0"
-        if(!input.replies){
-            params.body.query.bool.must_not[1] = {};
-            params.body.query.bool.must_not[1].term = { "childType": { "value": "reply"}};
-        }else{
-            params.body.query.bool.must[3] = {};
-            params.body.query.bool.must[3].term = { "parent": { "value": input.parent}};
-        }
+        params.body.query.bool.must_not[0].term = { "childType": { "value": "reply"}};
     }else{
-        if(!input.replies){
-            params.body.query.bool.must_not = [];
-            params.body.query.bool.must_not[0] = {};
-            params.body.query.bool.must_not[0].term = { "childType": { "value": "reply"}};
-        }else{
-            params.body.query.bool.must[3] = {};
-            params.body.query.bool.must[3].term = { "parent": { "value": input.parent}};
-        }
+        if(input.parent){
+            index = params.body.query.bool.must.length;
+            params.body.query.bool.must[index] = {};
+            params.body.query.bool.must[index].term = { "parent": { "value": input.parent}};}
     }
     return elasticClient.search(params);
 };
@@ -212,5 +219,6 @@ module.exports = {
     getMedia,
     incrementLikes,
     decrementLikes,
+    incrementretweets,
     delMedia
 };

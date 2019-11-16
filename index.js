@@ -175,17 +175,16 @@ app.post("/additem",verifyToken,(req,res) => {
         res.json({status: 'error', error: "no content"}); 
         return;
     }
-    let childType;
+    let childType = "";
     let media = [];
-    let parent;
-    if(req.body.childType){
+    let parent = "";
+    if(req.body.childType==="retweet" && req.body.parent){
         childType = req.body.childType;
+        parent = req.body.parent;
+        db.incrementretweets(parent);
     }
     if(req.body.media){
         media = req.body.media;
-    }
-    if(req.body.parent){
-        parent = req.body.parent;
     }
     mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
         if(doc){
