@@ -171,56 +171,50 @@ app.post("/verify",(req,res) => {
 app.post("/additem",verifyToken,(req,res) => {
     let content = req.body.content;
     if(!content){
-        res.status(500);
-        res.json({status: 'error', error: "no content"}); 
+        res.status(500).json({status: 'error', error: "no content"}); 
         return;
     }
-    let childType;
-    let media;
-    let parent;
-    if(req.body.childType){
+    let childType = "";
+    let media = [];
+    let parent = "";
+    if(req.body.childType==="retweet" && req.body.parent){
         childType = req.body.childType;
+        parent = req.body.parent;
+        db.incrementretweets(parent);
     }
     if(req.body.media){
         media = req.body.media;
     }
-    if(req.body.parent){
-        parent = req.body.parent;
-    }
     mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
         if(doc){
-             res.status(500);
-             res.json({status: 'error', error: "you have been logged out"}); 
+             res.status(500).json({status: 'error', error: "you have been logged out"}); 
         }
         else{
-            jwt.verify(req.token, 'MySecretKey',(err, data)=>{
-                if(err) {
-                    res.status(500);
-                    res.json({status:'error', error:"error verifying key"});}
-                else{
-                    const now = new Date();
-                    const item = {
-                       username: data.user.username,
-                       property: {
-                           likes: 0
-                       },
-                       childType,
-                       parent,
-                       media,   
-                       retweeted: 0,
-                       content,
-                       timestamp: parseFloat((now.getTime()/1000).toFixed(7))
-                    };
-                   db.addDocument('squawks',item).then((resp)=>{
-                        console.log(resp);
-                        res.status(200);
-                        res.json({status: 'OK',id: resp._id});
-                    }, (err) => {
-                        res.status(500);
-                        res.json({status:'error', error:"error adding item"});
+                jwt.verify(req.token, 'MySecretKey',(err, data)=>{
+                    if(err) {
+                        res.status(500).json({status:'error', error:"error verifying key"});}
+                    else{
+                        mongoose.model('users').findOne({username: data.user.username}).exec().then((doc) => { 
+                            if(!media.every(elem => doc.media.indexOf(elem) > -1)){ res.status(500).json({status:'error', error:"media files not affiliated"}); return;}
+                            const now = new Date();
+                            const item = {
+                                username: data.user.username,
+                                property: {
+                                    likes: 0
+                                },
+                                childType,
+                                parent,
+                                media,   
+                                retweeted: 0,
+                                content,
+                                timestamp: parseFloat((now.getTime()/1000).toFixed(7))
+                            };
+                            db.addDocument('squawks',item).then((resp)=>{
+                                    res.status(200).json({status: 'OK',id: resp._id});
+                                }, (err) => {res.status(500).json({status:'error', error:"error adding item"});});
+                            });
+                        }   
                     });
-                }   
-            });
         }
     });
 });
@@ -231,6 +225,9 @@ app.get("/item/:id",(req,res) => {
         console.log(resp);
         res.status(200);
         let item = resp._source;
+        if(!resp._source.childType){
+            resp._source.childType = null;
+        }
         item.id = resp._id;
         res.json({status: 'OK',item});
     }, (err) => {
@@ -240,24 +237,30 @@ app.get("/item/:id",(req,res) => {
 });
 
 app.post("/search",setToken,(req,res) => {
-   let timestamp = req.body.timestamp;
-   let limit = req.body.limit;
+   let input = {};
+   input.rank = (req.body.rank) ? req.body.rank: "interest";
+   input.replies  = (req.body.replies) ? req.body.replies: true;
+   input.hasMedia = (req.body.hasMedia == undefined) ? false : req.body.hasMedia;
+   input.timestamp = req.body.timestamp;
+   input.limit = req.body.limit;
+   input.parent = req.body.parent;
+   input.q = req.body.q;
    let now = new Date();
-   let usernames = (req.body.username) ? [req.body.username]:[];
+   input.usernames = (req.body.username) ? [req.body.username]:[];
    let following = (req.body.following == undefined) ? true: req.body.following;
-   if(!timestamp){
-       timestamp = parseFloat((now.getTime()/1000).toFixed(7));
+   if(!input.timestamp){
+       input.timestamp = parseFloat((now.getTime()/1000).toFixed(7));
    }
-   if(!limit){
-       limit = 25;
+   if(!input.limit){
+       input.limit = 25;
    }
-   else if(limit > 100){
-       limit = 100;
+   else if(input.limit > 100){
+       input.limit = 100;
    }
    mongoose.model('blacklist').findOne({token: req.token}).exec().then((doc) => {
-    usernames = usernames.map((value) => {return value.toLowerCase();}); 
+    input.usernames = input.usernames.map((value) => {return value.toLowerCase();}); 
     if(doc){
-        db.searchbyParams(timestamp,limit,req.body.q,usernames).then((resp)=>{
+        db.searchbyParams(input).then((resp)=>{
             let items = resp.hits.hits.map((val,index)=>{
                     let item = val._source;
                     item.id = val._id;
@@ -272,10 +275,9 @@ app.post("/search",setToken,(req,res) => {
         jwt.verify(req.token, 'MySecretKey',(err, data)=>{
                 let check = (!err) ? data.user.username:undefined;
                 getFollowing(check).then( result => {
-                    usernames = (!err && following) ? usernames.concat(result) : usernames;
-                    usernames = usernames.map((value) => {return value.toLowerCase();}); 
-                    console.log(usernames);
-                    db.searchbyParams(timestamp,limit,req.body.q,usernames).then((resp)=>{
+                    input.usernames = (!err && following) ? input.usernames.concat(result) : input.usernames;
+                    input.usernames = input.usernames.map((value) => {return value.toLowerCase();}); 
+                    db.searchbyParams(input).then((resp)=>{
                         let items = resp.hits.hits.map((val,index)=>{
                                 let item = val._source;
                                 item.id = val._id;
@@ -305,6 +307,7 @@ app.delete('/item/:id',verifyToken,(req,res) => {
                         let username = resp._source.username;
                         if(username === data.user.username){
                             db.deletebyId(req.params.id);
+                            resp._source.media.forEach(db.delMedia);
                             res.status(200);
                             res.json({status: 'OK'});
                         }

@@ -5,6 +5,7 @@ const formidable = require('formidable');
 const jwt = require("jsonwebtoken");
 const mongoose = require('mongoose');
 const uuidv4 = require('uuid/v4');
+const FileReader = require("filereader");
 
 
 
@@ -25,13 +26,20 @@ router.post('/addmedia',verifyToken ,(req, res) => {
                         let parseFiles = Object.entries(files);
                         let reader = new FileReader();
                         reader.readAsDataURL(parseFiles[0][1]);
+                        let extension = (parseFiles[0][1]).type;
                         reader.onload = function() {
                             let result =   reader.result.substring(reader.result.indexOf(",")+1);
-                            let buffer = new Buffer(result,"base64");
+                            let buffer = new Buffer.from(result,"base64");
                             let id = uuidv4();
-                            database.addMedia(id,buffer).then((result) => {res.status(200).json({status:'OK', id});}).catch((err) => {
-                                res.status(500).json({status:"error", error:"error adding media"});
-                            });
+                            database.addMedia(id,buffer,extension).then((result) => {
+                                mongoose.model('users').updateOne({username: data.user.username},
+                                    {$addToSet:{
+                                         media: id
+                                      }},
+                                   (err, result) => {if(err){console.log(err);}}
+                                )
+                                res.status(200).json({status:'OK', id});
+                            }).catch((err) => {res.status(500).json({status:"error", error:"error adding media"});});
                         };
                    })
                 }   
@@ -42,8 +50,9 @@ router.post('/addmedia',verifyToken ,(req, res) => {
 
 router.get('/media/:id',(req,res) => {
       database.getMedia(req.params.id).then((result) =>{
-        res.status(200).json({status:'OK', media: result}); 
-      }).catch((err)=> { res.status(500).json({status:"error", error:"media not found"});});
+        res.writeHead(200,{'Content-type':result.rows[0].extension});
+        res.end(result.rows[0].content); 
+      }).catch((err)=> {res.status(500).json({status:"error", error:"media not found"});});
 });
 
 function verifyToken(req,res,next) {
