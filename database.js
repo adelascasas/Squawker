@@ -78,12 +78,17 @@ const searchbyId = (indexName,id) => {
 };
 
 //Increment likes for specified item
-const incrementLikes = (id) => {
+const incrementLikes = (id,username) => {
     return elasticClient.update({
         index: "squawks",
         id,
         body: {
-            "script" : "ctx._source.property.likes++"
+            "script": {
+                "inline": "if(ctx._source.property.likes.indexOf(params.like) == -1){"+
+                    "ctx._source.property.likes.add(params.like);"+
+                    "ctx._source.property.interest++;}" ,
+                "params": {"like":username}
+              }
         }        
       });
 };
@@ -94,18 +99,22 @@ const incrementretweets = (id) => {
         index: "squawks",
         id,
         body: {
-            "script" : "ctx._source.retweeted++"
+            "script" : "ctx._source.retweeted++; ctx._source.property.interest++;"
         }        
       });
 };
 
 //Decrement likes for specified item
-const decrementLikes = (id) => {
+const decrementLikes = (id,username) => {
     return elasticClient.update({
         index: "squawks",
         id,
         body: {
-            "script" : "if(ctx._source.property.likes > 0){ctx._source.property.likes--}"
+            "script": {
+                "inline":"ctx._source.property.likes.remove(ctx._source.property.likes.indexOf(params.like));"+
+                "ctx._source.property.interest--;",
+                "params": {"like":username}
+              }
         }        
       });
 };
@@ -133,8 +142,7 @@ const searchbyParams = (input) => {
                 } 
             },
             "sort": [
-                {"retweeted" : "desc"},
-                {"property.likes" : "desc"},
+                {"property.interest" : "desc"},
                 "_score"
             ]
         },
@@ -142,9 +150,7 @@ const searchbyParams = (input) => {
      };
      let index;
     if(input.rank === "time"){
-         params.body.sort = [];
-         params.body.sort[0] = {};
-         params.body.sort[0].timestamp = "desc";
+         params.body.sort =  [{ "timestamp": "desc"},"_score"];
     }
     if(input.usernames.length > 0){
         index = params.body.query.bool.must.length;
@@ -171,7 +177,8 @@ const searchbyParams = (input) => {
         if(input.parent){
             index = params.body.query.bool.must.length;
             params.body.query.bool.must[index] = {};
-            params.body.query.bool.must[index].term = { "parent": { "value": input.parent}};}
+            params.body.query.bool.must[index].term = {"parent.keyword": {"value":input.parent}};
+           }
     }
     return elasticClient.search(params);
 };

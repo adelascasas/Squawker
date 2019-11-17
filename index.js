@@ -181,7 +181,9 @@ app.post("/additem",verifyToken,(req,res) => {
         childType = req.body.childType;
         parent = req.body.parent;
         db.incrementretweets(parent);
-    }
+    }else if(req.body.childType==="reply" && req.body.parent){
+        childType = req.body.childType;
+        parent = req.body.parent;}
     if(req.body.media){
         media = req.body.media;
     }
@@ -196,18 +198,22 @@ app.post("/additem",verifyToken,(req,res) => {
                     else{
                         mongoose.model('users').findOne({username: data.user.username}).exec().then((doc) => { 
                             if(!media.every(elem => doc.media.indexOf(elem) > -1)){ res.status(500).json({status:'error', error:"media files not affiliated"}); return;}
-                            const now = new Date();
+                            mongoose.model('users').updateOne({username: data.user.username},
+                                {$pullAll:{ media: media}},
+                               (err, result) => {if(err){res.status(500).json({status: 'error'});}}
+                            )
                             const item = {
                                 username: data.user.username,
                                 property: {
-                                    likes: 0
+                                    likes: [],
+                                    interest: 0
                                 },
                                 childType,
                                 parent,
                                 media,   
                                 retweeted: 0,
                                 content,
-                                timestamp: parseFloat((now.getTime()/1000).toFixed(7))
+                                timestamp: new Date()
                             };
                             db.addDocument('squawks',item).then((resp)=>{
                                     res.status(200).json({status: 'OK',id: resp._id});
@@ -225,9 +231,12 @@ app.get("/item/:id",(req,res) => {
         console.log(resp);
         res.status(200);
         let item = resp._source;
-        if(!resp._source.childType){
-            resp._source.childType = null;
+        if(!item.childType){
+            item.childType = null;
         }
+        item.property.likes = item.property.likes.length;
+        delete item.property.interest;
+        item.timestamp = item.timestamp = parseFloat((new Date(item.timestamp).getTime()/1000).toFixed(7));
         item.id = resp._id;
         res.json({status: 'OK',item});
     }, (err) => {
@@ -237,20 +246,18 @@ app.get("/item/:id",(req,res) => {
 });
 
 app.post("/search",setToken,(req,res) => {
+    console.log(req.body);
    let input = {};
    input.rank = (req.body.rank) ? req.body.rank: "interest";
-   input.replies  = (req.body.replies) ? req.body.replies: true;
+   input.replies  = (req.body.replies == undefined) ? true: req.body.replies;
    input.hasMedia = (req.body.hasMedia == undefined) ? false : req.body.hasMedia;
-   input.timestamp = req.body.timestamp;
    input.limit = req.body.limit;
    input.parent = req.body.parent;
    input.q = req.body.q;
-   let now = new Date();
    input.usernames = (req.body.username) ? [req.body.username]:[];
    let following = (req.body.following == undefined) ? true: req.body.following;
-   if(!input.timestamp){
-       input.timestamp = parseFloat((now.getTime()/1000).toFixed(7));
-   }
+   console.log(req.body.timestamp);
+   input.timestamp = (!req.body.timestamp) ? new Date() : new Date(req.body.timestamp*1000);
    if(!input.limit){
        input.limit = 25;
    }
@@ -264,8 +271,14 @@ app.post("/search",setToken,(req,res) => {
             let items = resp.hits.hits.map((val,index)=>{
                     let item = val._source;
                     item.id = val._id;
+                    if(!item.childType){
+                        item.childType = null;
+                    }
+                    item.property.likes = item.property.likes.length;
+                    delete item.property.interest;
                     return item;
                 });
+                console.log(items);
                 res.status(200).json({status: 'OK', items});
                 }, (err) => {
                 res.status(500).json({status:'error', error:"items not found"});
@@ -280,9 +293,16 @@ app.post("/search",setToken,(req,res) => {
                     db.searchbyParams(input).then((resp)=>{
                         let items = resp.hits.hits.map((val,index)=>{
                                 let item = val._source;
+                                if(!item.childType){
+                                    item.childType = null;
+                                }
+                                item.property.likes = item.property.likes.length;
+                                delete item.property.interest;
+                                item.timestamp = parseFloat((new Date(item.timestamp).getTime()/1000).toFixed(7));
                                 item.id = val._id;
                                 return item;
-                            });
+                            }); 
+                            console.log(items);       
                             res.status(200).json({status: 'OK', items});
                             }, (err) => {
                             res.status(500).json({status:'error', error:"items not found"});
